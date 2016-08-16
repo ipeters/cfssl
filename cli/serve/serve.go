@@ -49,7 +49,7 @@ Usage of serve:
                     [-responder cert] [-responder-key key] [-tls-cert cert] [-tls-key key] \
                     [-mutual-tls-ca ca] [-mutual-tls-cn regex] \
                     [-tls-remote-ca ca] [-mutual-tls-client-cert cert] [-mutual-tls-client-key key] \
-                    [-db-config db-config]
+                    [-db-config db-config] [-endpoints endpoints]
 
 Flags:
 `
@@ -57,7 +57,7 @@ Flags:
 // Flags used by 'cfssl serve'
 var serverFlags = []string{"address", "port", "ca", "ca-key", "ca-bundle", "int-bundle", "int-dir", "metadata",
 	"remote", "config", "responder", "responder-key", "tls-key", "tls-cert", "mutual-tls-ca", "mutual-tls-cn",
-	"tls-remote-ca", "mutual-tls-client-cert", "mutual-tls-client-key", "db-config"}
+	"tls-remote-ca", "mutual-tls-client-cert", "mutual-tls-client-key", "db-config", "endpoints"}
 
 var (
 	conf       cli.Config
@@ -197,8 +197,23 @@ var endpoints = map[string]func() (http.Handler, error){
 }
 
 // registerHandlers instantiates various handlers and associate them to corresponding endpoints.
-func registerHandlers() {
-	for path, getHandler := range endpoints {
+func registerHandlers() error {
+	var paths []string
+
+	if len(conf.Endpoints) > 0 {
+		paths = conf.Endpoints
+	} else {
+		for path := range endpoints {
+			paths = append(paths, path)
+		}
+	}
+
+	// for path, getHandler := range endpoints {
+	for _, path := range paths {
+		getHandler, ok := endpoints[path]
+		if !ok {
+			return fmt.Errorf("endpoint '%s' does not exist", path)
+		}
 		path = v1APIPath(path)
 		log.Infof("Setting up '%s' endpoint", path)
 		if handler, err := getHandler(); err != nil {
@@ -209,6 +224,8 @@ func registerHandlers() {
 	}
 
 	log.Info("Handler set up complete.")
+
+	return nil
 }
 
 // serverMain is the command line entry point to the API server. It sets up a
@@ -244,7 +261,9 @@ func serverMain(args []string, c cli.Config) error {
 		log.Warningf("couldn't initialize ocsp signer: %v", err)
 	}
 
-	registerHandlers()
+	if err = registerHandlers(); err != nil {
+		return err
+	}
 
 	addr := net.JoinHostPort(conf.Address, strconv.Itoa(conf.Port))
 
