@@ -9,6 +9,7 @@ import (
 
 	"github.com/cloudflare/cfssl/api"
 	"github.com/cloudflare/cfssl/auth"
+	"github.com/cloudflare/cfssl/csr"
 	"github.com/cloudflare/cfssl/errors"
 	"github.com/cloudflare/cfssl/log"
 	"github.com/cloudflare/cfssl/signer"
@@ -130,6 +131,20 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) error {
 	if profile.Provider != nil {
 		log.Error("profile requires authentication")
 		return errors.NewBadRequestString("authentication required")
+	}
+
+	if profile.InheritClientSubjectAndNames {
+		if r.TLS == nil || len(r.TLS.VerifiedChains) == 0 {
+			return errors.NewBadRequestString("unable to inherit certificate fields without mutual TLS")
+		}
+
+		cr := csr.ExtractCertificateRequest(r.TLS.VerifiedChains[0][0])
+
+		signReq.Subject = &signer.Subject{
+			Names: cr.Names,
+			CN:    cr.CN,
+		}
+		signReq.Hosts = cr.Hosts
 	}
 
 	cert, err = h.signer.Sign(signReq)
