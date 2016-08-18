@@ -72,23 +72,24 @@ type CAConstraint struct {
 // A SigningProfile stores information that the CA needs to store
 // signature policy.
 type SigningProfile struct {
-	Usage               []string     `json:"usages"`
-	IssuerURL           []string     `json:"issuer_urls"`
-	OCSP                string       `json:"ocsp_url"`
-	CRL                 string       `json:"crl_url"`
-	CAConstraint        CAConstraint `json:"ca_constraint"`
-	OCSPNoCheck         bool         `json:"ocsp_no_check"`
-	ExpiryString        string       `json:"expiry"`
-	BackdateString      string       `json:"backdate"`
-	AuthKeyName         string       `json:"auth_key"`
-	RemoteName          string       `json:"remote"`
-	NotBefore           time.Time    `json:"not_before"`
-	NotAfter            time.Time    `json:"not_after"`
-	NameWhitelistString string       `json:"name_whitelist"`
-	AuthRemote          AuthRemote   `json:"auth_remote"`
-	CTLogServers        []string     `json:"ct_log_servers"`
-	AllowedExtensions   []OID        `json:"allowed_extensions"`
-	CertStore           string       `json:"cert_store"`
+	Usage                        []string     `json:"usages"`
+	IssuerURL                    []string     `json:"issuer_urls"`
+	OCSP                         string       `json:"ocsp_url"`
+	CRL                          string       `json:"crl_url"`
+	CAConstraint                 CAConstraint `json:"ca_constraint"`
+	OCSPNoCheck                  bool         `json:"ocsp_no_check"`
+	ExpiryString                 string       `json:"expiry"`
+	BackdateString               string       `json:"backdate"`
+	AuthKeyName                  string       `json:"auth_key"`
+	RemoteName                   string       `json:"remote"`
+	NotBefore                    time.Time    `json:"not_before"`
+	NotAfter                     time.Time    `json:"not_after"`
+	NameWhitelistString          string       `json:"name_whitelist"`
+	AuthRemote                   AuthRemote   `json:"auth_remote"`
+	CTLogServers                 []string     `json:"ct_log_servers"`
+	AllowedExtensions            []OID        `json:"allowed_extensions"`
+	CertStore                    string       `json:"cert_store"`
+	InheritClientSubjectAndNames bool         `json:"inherit_client_subject_and_names"`
 
 	Policies                    []CertificatePolicy
 	Expiry                      time.Duration
@@ -282,6 +283,23 @@ func (p *SigningProfile) populate(cfg *Config) error {
 	p.ExtensionWhitelist = map[string]bool{}
 	for _, oid := range p.AllowedExtensions {
 		p.ExtensionWhitelist[asn1.ObjectIdentifier(oid).String()] = true
+	}
+
+	if p.InheritClientSubjectAndNames {
+		if p.CSRWhitelist != nil {
+			// If a whitelist was already set, override subject and name fields to false
+			p.CSRWhitelist.Subject = false
+			p.CSRWhitelist.DNSNames = false
+			p.CSRWhitelist.EmailAddresses = false
+			p.CSRWhitelist.IPAddresses = false
+		} else {
+			// If a whitelist was not already set, set all but subject and name fields to true
+			p.CSRWhitelist = &CSRWhitelist{
+				PublicKeyAlgorithm: true,
+				PublicKey:          true,
+				SignatureAlgorithm: true,
+			}
+		}
 	}
 
 	return nil
